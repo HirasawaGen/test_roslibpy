@@ -1,0 +1,17 @@
+client:
+  host: localhost
+  port: 9090
+
+
+topics: !!set
+  /scan:
+  /camera/rgb/image_raw:
+  /cmd_vel:
+
+services: !!set
+  /gazebo/set_model_state:
+  /gazebo/get_model_state:
+  /gazebo/reset_simulation:
+  /gazebo/pause_physics:
+  /gazebo/unpause_physics:
+  /gazebo/get_physics_properties:
