@@ -1,7 +1,6 @@
 from tqdm import tqdm#进度条
 import numpy as np
 import torch
-import rospy
 
 
 def moving_average(a, window_size):
@@ -39,7 +38,7 @@ def train_on_policy_agent(env, agent, max_episodes, max_steps):
 
                 while not done:
                     action = agent.take_action(state)  # 探索
-                    next_state, reward, done, success = env.step(action)
+                    next_state, reward, done, success = env.step((action[0].item(), action[1].item()))  # 行动
 
                     transition_dict['states'].append(state)  # 数据存储
                     transition_dict['actions'].append(action)
@@ -52,7 +51,7 @@ def train_on_policy_agent(env, agent, max_episodes, max_steps):
                     step += 1
 
                     if success:  # 成功通知
-                        rospy.loginfo(f'Successfully Reach Goal at Episode: {max_episodes / 10 * i + i_episode + 1}')
+                        print(f'Successfully Reach Goal at Episode: {max_episodes / 10 * i + i_episode + 1}')
                     if done or step == max_steps:  # 标志为True或超过最大步数，跳出此次交互
                         break
 

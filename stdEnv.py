@@ -57,7 +57,7 @@ class GazeboMaze(gym.Env):
         self._rl_constant = {  # TODO: move to construction as a **kwargs
             'r_collision': -20.0,  # reward for collision
             'r_arrive': 100.0,  # reward for arriving the goal
-            'Cd': 0.5, # threshold for arriving the goal
+            'Cd': 2.0, # threshold for arriving the goal
             'Cr': 100, # yi ge xi shu
             'Cp': -0.02, # yi ge xi shu, r_notarrive = Cr * delta_d + Cp
             'a_min': 0.1,  # minimum linear velocity
@@ -65,6 +65,9 @@ class GazeboMaze(gym.Env):
             'w_min': -1.0,  # minimum angular velocity
             'w_max': 1.0,  # maximum angular velocity
         }
+
+        # self._topics += self.SCAN_TOPIC_NAME
+        # self._topics += self.CAMERA_TOPIC_NAME
 
         self.action_space = gym.spaces.Box(
             low=np.array([self._rl_constant['a_min'], self._rl_constant['w_min']]),
@@ -238,16 +241,17 @@ class GazeboMaze(gym.Env):
     def reset(self):
         self.is_pause = False
         self.cmd_vel = 0.0, 0.0
-        self['goal'] = *self._goal_init_position, 0.0
+        # self._services['/gazebo/reset_simulation'] << {}
         self['robot'] = *self._robot_init_position, random.gauss(-math.pi/2, math.pi/2)
         d_x, d_y, d_theta = self['robot', 'goal']
         d_dist = math.sqrt(d_x**2 + d_y**2)
         self._rl_params['rpd'] = d_dist, d_theta
-        self._services['/gazebo/reset_simulation'] << {}
         self._rl_params['success'] = False
         self._rl_params['reward'] = 0.0
         self._rl_params['success_episode'] = 0
         self._services['/gazebo/reset_simulation'] << {}
+        self['goal'] = *self._goal_init_position, 0.0
+        time.sleep(3)
         self.is_pause = True
         res = self.image
         return res
@@ -261,9 +265,9 @@ class GazeboMaze(gym.Env):
         scan_data = self.laser_scan
         self._rl_params['done'] = False
         self._rl_params['reward'] = 0.0
-        min_range = 0.15  # TODO: move to construction
+        min_range = 0.2  # TODO: move to construction
         if np.min(scan_data) < min_range:
-            print("\033[31mcollision!\033[0m")
+            print(f"\033[31mcollision! min_range={np.min(scan_data)}, action={action}\033[0m")
             self._rl_params['done'] = True
             self._rl_params['reward'] = self._rl_constant['r_collision']
         d_x, d_y, d_theta = self['robot', 'goal']

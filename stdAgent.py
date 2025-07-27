@@ -1,12 +1,11 @@
 """
 此脚本是本工程强化学习方面的Agent脚本：
 """
-import rospy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from stdUtils import rl_utils
+import stdUtils
 
 
 class ChannelAttention(nn.Module):
@@ -132,7 +131,7 @@ class PPOContinuous:
         self.device = device
 
     def take_action(self, state):
-        state = torch.tensor([state], dtype=torch.float).to(self.device)
+        state = torch.tensor(state, dtype=torch.float).to(self.device).unsqueeze(0)
         mu, sigma = self.actor(state)#均值，标准差
         action_dist = torch.distributions.Normal(mu, sigma)
         action = action_dist.sample()
@@ -140,14 +139,14 @@ class PPOContinuous:
 
     def update(self, transition_dict):
         states = torch.tensor(transition_dict['states'], dtype=torch.float).to(self.device)
-        actions = torch.tensor([item.detach().numpy() for item in transition_dict['actions']]).to(self.device)
+        actions = torch.tensor([item.detach().cpu().numpy() for item in transition_dict['actions']]).to(self.device)
         rewards = torch.tensor(transition_dict['rewards'], dtype=torch.float).to(self.device)
         next_states = torch.tensor(transition_dict['next_states'], dtype=torch.float).to(self.device)
         dones = torch.tensor(transition_dict['dones'], dtype=torch.float).to(self.device)
 
         td_target = rewards + self.gamma * self.critic(next_states) * (1 - dones)
         td_delta = td_target - self.critic(states)
-        advantage = rl_utils.compute_advantage(self.gamma, self.lmbda, td_delta.cpu()).to(self.device)
+        advantage = stdUtils.compute_advantage(self.gamma, self.lmbda, td_delta.cpu()).to(self.device)
         mu, std = self.actor(states)
         action_dists = torch.distributions.Normal(mu.detach(), std.detach())
         old_log_probs = action_dists.log_prob(actions)  # 动作是正态分布

@@ -12,14 +12,30 @@ def ros_context(host: str, port: int):
     subscribed_topics: set[str] = set()
     messages: dict[str, dict] = {}
 
-    callback_factory = lambda topic_name: (lambda msg: messages.__setitem__(topic_name, msg))
+    callback_factory = lambda topic_name: (lambda msg: messages.__setitem__(topic_name, {'msg': msg, 'updated': True}))
     # callback_factory = lambda topic_name: (lambda msg: print(f"Received message on topic '{topic_name}': {msg}"))
 
     def _get_topic(topic_name: str):
+        '''
+        if topic type is 'unknown', the method 'get_topic_type' will stuck in for unknow reason.
+        no warn no error, just stuck.
+        this is an awful error.
+        so I hard code the topic type for cmd_vel and scan here. avoid they stuck.
+        '''
+        msg_type: str
+        
+        match topic_name:
+            case str() if 'cmd_vel' in topic_name:
+                msg_type = 'geometry_msgs/Twist'
+            case str() if'scan' in topic_name:
+                msg_type ='sensor_msgs/LaserScan'
+            case str():
+                msg_type = client.get_topic_type(topic_name)
+        
         return roslibpy.Topic(
             client,
             topic_name,
-            client.get_topic_type(topic_name)
+            msg_type
         )
 
     def _topics__add__(self, topic_name: str):
@@ -41,19 +57,24 @@ def ros_context(host: str, port: int):
         return self
 
     def _topics__getitem__(self, topic_name: str):
+        '''
+        TODO
+        '''
         topic = _get_topic(topic_name)
-        if topic_name not in subscribed_topics:
+        if topic_name in subscribed_topics:  # longtime subscribed topics
+            return messages[topic_name]            
+        else:  # once subscribed topics
             topic.subscribe(callback_factory(topic_name))
-        start_time = time.time()
-        while messages.get(topic_name) is None:
-            time.sleep(0.1)
-            if time.time() - start_time > 10.0:
-                raise TimeoutError(f"Timeout waiting for '{topic_name}' to be published")
-        msg = messages[topic_name]
-        # messages[topic_name] = None
-        if topic_name not in subscribed_topics:
+            start_time = time.time()
+            while messages.get(topic_name) is None:
+                time.sleep(0.1)
+                if time.time() - start_time > 10.0:
+                    raise TimeoutError(f"Timeout waiting for '{topic_name}' to be published")
+            msg = messages[topic_name]
+            del msg['updated']
+            del messages[topic_name]
             topic.unsubscribe()
-        return msg
+            return msg
 
     def _topics__setitem__(self, topic_name: str, msg: dict):
         topic = _get_topic(topic_name)
@@ -95,6 +116,7 @@ def ros_context(host: str, port: int):
     yield client, topics, services
 
     client.terminate()
+    print("ROS client terminated")
 
     for topic_name in subscribed_topics:
         topic = _get_topic(topic_name)
