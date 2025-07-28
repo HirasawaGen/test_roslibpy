@@ -3,6 +3,13 @@ from contextlib import contextmanager
 import roslibpy
 from roslibpy import Ros
 
+'''
+TODO:
+1. add some comments to explain the code.
+2. user variable `subscribed_topics` to mark subscribed topics, maybe not a good idea
+3. `roslibpy.Topic` object maybe initialized multiple times, no bug, but it's not efficient.
+4. maybe `client.terminate()` is already unsubscribed the topics, maybe I don't need to unsubscribe by myself.
+'''
 
 @contextmanager
 def ros_context(host: str, port: int):
@@ -17,25 +24,25 @@ def ros_context(host: str, port: int):
 
     def _get_topic(topic_name: str):
         '''
-        if topic type is 'unknown', the method 'get_topic_type' will stuck in for unknow reason.
+        if topic type is 'unknown', the service call '/rosapi/topic_type' will stuck in for unknow reason.
         no warn no error, just stuck.
         this is an awful error.
         so I hard code the topic type for cmd_vel and scan here. avoid they stuck.
         '''
-        msg_type: str
-        
+        topic_type: str
         match topic_name:
-            case str() if 'cmd_vel' in topic_name:
-                msg_type = 'geometry_msgs/Twist'
-            case str() if'scan' in topic_name:
-                msg_type ='sensor_msgs/LaserScan'
-            case str():
-                msg_type = client.get_topic_type(topic_name)
-        
+            case _ if 'cmd_vel' in topic_name:
+                topic_type = 'geometry_msgs/Twist'
+            case _ if'scan' in topic_name:
+                topic_type ='sensor_msgs/LaserScan'
+            case _:
+                topic_type_service = roslibpy.Service(client, "/rosapi/topic_type", "rosapi/TopicType")
+                result = topic_type_service.call(roslibpy.ServiceRequest({'topic': topic_name}))
+                topic_type = result['type']
         return roslibpy.Topic(
             client,
             topic_name,
-            msg_type
+            topic_type
         )
 
     def _topics__add__(self, topic_name: str):
@@ -81,10 +88,16 @@ def ros_context(host: str, port: int):
         topic.publish(msg)
 
     def _get_service(service_name: str):
+        service_type: str
+        match service_name:
+            case _:
+                service_type_service = roslibpy.Service(client, "/rosapi/service_type", "rosapi/ServiceType")
+                result = service_type_service.call(roslibpy.ServiceRequest({'service': service_name}))
+                service_type = result['type']
         return roslibpy.Service(
             client,
             service_name,
-            client.get_service_type(service_name)
+            service_type
         )
     
     def _services__getitem__(self, service_name: str):
@@ -115,10 +128,10 @@ def ros_context(host: str, port: int):
     
     yield client, topics, services
 
-    client.terminate()
-    print("ROS client terminated")
-
     for topic_name in subscribed_topics:
         topic = _get_topic(topic_name)
         topic.unsubscribe()
 
+    client.terminate()
+
+    
